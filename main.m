@@ -9,7 +9,7 @@ opts = detectImportOptions('InputData.xlsx');
 opts.VariableNames = {' ', 'arrive_date', 'arrive_time', 'arrive_flight', 'arrive_type',  'plane_type', 'departure_date', 'departure_time', 'departure_flight', 'departure_type', 'prior_airport', 'next_airport'};
 opts = setvartype(opts, 'plane_type', 'char');
 opts.PreserveVariableNames = true;
-preview('InputData.xlsx', opts)
+%preview('InputData.xlsx', opts)
 global T
 T = readtable('InputData.xlsx', opts, 'ReadRowNames', true);
 
@@ -34,28 +34,22 @@ global n_flight
 n_gate = 69;
 n_flight = size(T, 1);
 
-%x = zeros(n_gate, n_flight);
-%fitness(x(:));
-
 %% 约束与运行
-% 唯一性约束
-A = zeros(n_flight, n_gate * n_flight);
-for i = 1:n_flight
-    A(i, (i - 1) * n_gate + 1 : i * n_gate) = ones(1, n_gate);
-end
-b = ones(n_flight, 1);
-% 01约束
-lb = zeros(n_gate * n_flight, 1);
-ub = ones(n_gate * n_flight, 1);
+% 不适用onehot编码，而是使用1-69表示分配的登机口，0表示不分配
+% 这样做可以直接满足唯一性约束，避免收敛还无法满足约束的情况
+% 登机口数约束
+lb = zeros(n_flight, 1);
+ub = ones(n_flight, 1) * n_gate;
 % 整数约束
-intcon = 1:n_gate * n_flight;
+intcon = 1:n_flight;
 
 tic
-% 也许可以用gamultiobj？
-options = optimoptions(@ga, 'Display', 'iter', 'UseParallel', true);
+% TODO: 也许可以用gamultiobj？
+% TODO: 使用UseParallel会出现无法预料的bug，如何避免？
+options = optimoptions(@ga, 'Display', 'iter', 'UseParallel', false);
 disp(options)
-[x, fval, exitflag, output, population, scores] = ga(@fitness, n_gate * n_flight, A, b, [], [], lb, ub, @nonlcon, intcon, options);
+[x, fval, exitflag, output, population, scores] = ga(@fitness, n_flight, [], [], [], [], lb, ub, @nonlcon, intcon, options);
 toc
 
-x = reshape(x, n_gate, n_flight);
-x = x';
+%% 结果输出
+x
