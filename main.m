@@ -24,15 +24,75 @@ end
 T = T(indices, :);
 
 %% 读取登机口信息
-global T_gates
-T_gates = readtable('InputData.xlsx', 'Sheet', 3, 'ReadRowNames', true, 'PreserveVariableNames', true);
-T_gates.Properties.VariableNames = {'hall', 'district', 'arrive_type', 'departure_type', 'plane_type'};
+global T_gate
+T_gate = readtable('InputData.xlsx', 'Sheet', 3, 'ReadRowNames', true, 'PreserveVariableNames', true);
+T_gate.Properties.VariableNames = {'hall', 'district', 'arrive_type', 'departure_type', 'plane_type'};
 
 %% 定义登机口数和航班数
 global n_gate
 global n_flight
 n_gate = 69;
 n_flight = size(T, 1);
+
+%% 矢量化机型字符串
+global flight_pt % flight plane type，0窄1宽
+flight_pt = zeros(1, n_flight);
+wide_types = {'332', '333', '33E', '33H', '33L', '773'};
+T_flight_pt = T{:, 'plane_type'};
+for i = 1:n_flight
+    if ismember(T{i, 'plane_type'}{1}, wide_types)
+        flight_pt(i) = 1;
+    end
+end
+flight_pt = logical(flight_pt);
+
+global gate_pt % gate plane type，0窄1宽
+gate_pt = zeros(1, n_gate);
+T_gate_pt = T_gate{:, 'plane_type'};
+for i = 1:n_gate
+    if T_gate{i, 'plane_type'}{1} == 'W'
+        gate_pt(i) = 1;
+    end
+end
+gate_pt = logical(gate_pt);
+
+%% 矢量化到达/出发的国内/国际字符串
+global flight_type
+% 0国内1国际 -> 到达/出发：00，01，10，11 -> 1，2，3，4
+flight_type = zeros(1, n_flight);
+T_flight_type = T{:, {'arrive_type', 'departure_type'}};
+for i = 1:n_flight
+    [at, dt] = T_flight_type{i, :};
+    t = 1;
+    if at == 'I'
+        t = t + 2;
+    end
+    if dt == 'I'
+        t = t + 1;
+    end
+    flight_type(i) = t;
+end
+
+global gate_type
+% 四列代表flight_di四种情况，值为1表示允许
+gate_type = zeros(n_gate, 4);
+T_gate_type = T_gate{:, {'arrive_type', 'departure_type'}};
+for i = 1:n_gate
+    [at, dt] = T_gate_type{i, :};
+    if contains(at, 'D') && contains(dt, 'D')
+        gate_type(i, 1) = 1;
+    end
+    if contains(at, 'D') && contains(dt, 'I')
+        gate_type(i, 2) = 1;
+    end
+    if contains(at, 'I') && contains(dt, 'D')
+        gate_type(i, 3) = 1;
+    end
+    if contains(at, 'I') && contains(dt, 'I')
+        gate_type(i, 4) = 1;
+    end
+end
+gate_type = logical(gate_type);
 
 %% 约束与运行
 % 不适用onehot编码，而是使用1-69表示分配的登机口，0表示不分配
@@ -44,9 +104,9 @@ ub = ones(n_flight, 1) * n_gate;
 intcon = 1:n_flight;
 
 tic
-% TODO: 也许可以用gamultiobj？
+% TODO: 可以用gamultiobj，但为了实现整数规划，必须自己实现交配、变异、交叉
 % TODO: 使用UseParallel会出现无法预料的bug，如何避免？
-options = optimoptions(@ga, 'Display', 'iter', 'UseParallel', false);
+options = optimoptions(@ga, 'Display', 'iter', 'MaxStallGenerations', 100, 'UseParallel', false);
 disp(options)
 [x, fval, exitflag, output, population, scores] = ga(@fitness, n_flight, [], [], [], [], lb, ub, @nonlcon, intcon, options);
 toc
