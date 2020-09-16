@@ -112,3 +112,4 @@ toc
 x = gate_map(x);
 sum(~~x)
 sum(~~exclude(x))
+sum(~~exclude2(x))

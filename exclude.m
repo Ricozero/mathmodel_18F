@@ -12,6 +12,7 @@ for i = 1:n_puck
 end
 n_occupy = n_occupy - 1;
 
+% 先从最早到达的判断，如果相等则选择占据时间最短的
 x_new = x;
 for i = 1:n_gate
     % 占用此登机口的转场编号
